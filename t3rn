@@ -10,7 +10,8 @@ echo "       === T3RN Executor Installer ==="
 sleep 1
 
 # ------------------ Prompt Input ------------------
-read -p "🧪 Masukkan PRIVATE KEY Anda: " PRIVATE_KEY
+read -s -p "🧪 Masukkan PRIVATE KEY Anda (disembunyikan): " PRIVATE_KEY
+echo ""
 read -p "🔑 Masukkan Alchemy API KEY Anda: " ALCHEMY_API_KEY
 read -p "⛽ Masukkan GAS PRICE Maksimal (misalnya: 10000): " MAX_GAS_PRICE
 
