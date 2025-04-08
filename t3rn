@@ -8,8 +8,8 @@ echo "
  | '_ \| | | | / __| __/ _\` |/ __| |/ /
  | |_) | | |_| \__ \ || (_| | (__|   < 
  |_.__/|_|\__,_|___/\__\__,_|\___|_|\_\
-"
 
+"
 
 # Prompt untuk user (default: root)
 read -p "Masukkan nama user untuk menjalankan executor (default: root): " EXECUTOR_USER
