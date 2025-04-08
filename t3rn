@@ -1,137 +1,96 @@
 #!/bin/bash
 
-# Menampilkan ASCII Art untuk "Blustack"
-echo "
-  _     _           _             _    
- | |   | |         | |           | |   
- | |__ | |_   _ ___| |_ __ _  ___| | __
- | '_ \| | | | / __| __/ _\` |/ __| |/ /
- | |_) | | |_| \__ \ || (_| | (__|   < 
- |_.__/|_|\__,_|___/\__\__,_|\___|_|\_\
+clear
+echo "  | |   | |         | |           | |   "
+echo "  | |__ | |_   _ ___| |_ __ _  ___| | __"
+echo "  | '_ \| | | | / __| __/ _\ |/ __| |/ /"
+echo "  | |_) | | |_| \__ \ || (_| | (__|   < "
+echo "  |_.__/|_|\__,_|___/\__\__,_|\___|_|\_\\"
+echo "       === T3RN Executor Installer ==="
+sleep 1
 
-"
+# ------------------ Prompt Input ------------------
+read -p "🧪 Masukkan PRIVATE KEY Anda: " PRIVATE_KEY
+read -p "🔑 Masukkan Alchemy API KEY Anda: " ALCHEMY_API_KEY
+read -p "⛽ Masukkan GAS PRICE Maksimal (misalnya: 10000): " MAX_GAS_PRICE
 
-# Prompt untuk user (default: root)
-read -p "Masukkan nama user untuk menjalankan executor (default: root): " EXECUTOR_USER
-EXECUTOR_USER=${EXECUTOR_USER:-root}
+# ------------------ Update & Install ------------------
+echo "[*] Update sistem & install dependencies..."
+apt update && apt install curl tmux wget -y
 
-# Hentikan & hapus service lama
-if systemctl list-units --full -all | grep -q "t3rn-executor.service"; then
-    sudo systemctl stop t3rn-executor.service
-    sudo systemctl disable t3rn-executor.service
-    sudo systemctl daemon-reload
-fi
+# ------------------ Bersih-bersih executor lama ------------------
+echo "[*] Hapus executor versi lama..."
+cd /root
+rm -rf executor*
+rm -f /etc/systemd/system/t3rn-executor.service
 
-# Hapus file lama
-sudo rm -rf /home/$EXECUTOR_USER/t3rn
-sudo rm -rf /etc/systemd/system/t3rn-executor.service
-sudo rm -rf /etc/t3rn-executor.env
+# ------------------ Download executor terbaru ------------------
+echo "[*] Download executor v0.61.0..."
+wget https://github.com/t3rn/executor-release/releases/download/v0.61.0/executor-linux-v0.61.0.tar.gz
 
-# Prompt Private Key
-while [[ -z "$PRIVATE_KEY_LOCAL" ]]; do
-    read -sp "Masukkan PRIVATE_KEY_LOCAL (tidak boleh kosong): " PRIVATE_KEY_LOCAL
-    echo ""
-done
+echo "[*] Ekstrak file..."
+tar -xvzf executor-linux-v0.61.0.tar.gz
+chmod +x /root/executor/executor/bin/executor
 
-# Prompt Alchemy API
-while [[ -z "$APIKEY_ALCHEMY" ]]; do
-    read -p "API Key Alchemy (tidak boleh kosong): " APIKEY_ALCHEMY
-    echo
-done
+# ------------------ Buat file run_executor.sh ------------------
+echo "[*] Buat skrip run_executor.sh..."
+cat <<EOF > /root/run_executor.sh
+#!/bin/bash
 
-# Prompt Gas Price
-while [[ -z "$GAS_PRICE" ]]; do
-    read -p "Gas Price (tidak boleh kosong): " GAS_PRICE
-    echo
-done
+export ENVIRONMENT=testnet
+export LOG_LEVEL=debug
+export LOG_PRETTY=false
+export EXECUTOR_PROCESS_BIDS_ENABLED=true
+export EXECUTOR_PROCESS_ORDERS_ENABLED=true
+export EXECUTOR_PROCESS_CLAIMS_ENABLED=true
+export ENABLED_NETWORKS='arbitrum-sepolia,base-sepolia,optimism-sepolia,l2rn'
+export NETWORKS_DISABLED='blast-sepolia'
+export EXECUTOR_MAX_L3_GAS_PRICE=$MAX_GAS_PRICE
+export PRIVATE_KEY_LOCAL=$PRIVATE_KEY
+export ALCHEMY_API_KEY=$ALCHEMY_API_KEY
 
-# Variabel direktori dan versi
-INSTALL_DIR="/home/$EXECUTOR_USER/t3rn"
-SERVICE_FILE="/etc/systemd/system/t3rn-executor.service"
-ENV_FILE="/etc/t3rn-executor.env"
-EXECUTOR_VERSION="v0.62.0"
-EXECUTOR_FILE="executor-linux-$EXECUTOR_VERSION.tar.gz"
-EXECUTOR_URL="https://github.com/t3rn/executor-release/releases/download/$EXECUTOR_VERSION/$EXECUTOR_FILE"
-
-# Unduh dan ekstrak executor
-mkdir -p "$INSTALL_DIR" && cd "$INSTALL_DIR"
-
-if curl --output /dev/null --silent --head --fail "$EXECUTOR_URL"; then
-    echo "🔽 Mengunduh Executor dari $EXECUTOR_URL..."
-    curl -L -o "$EXECUTOR_FILE" "$EXECUTOR_URL"
-else
-    echo "❌ URL tidak dapat diakses, pastikan koneksi internet stabil."
-    exit 1
-fi
-
-echo "📦 Mengekstrak Executor..."
-tar -xzvf "$EXECUTOR_FILE" || {
-    echo "❌ Gagal mengekstrak file. Pastikan format file benar."
-    exit 1
-}
-
-rm -f "$EXECUTOR_FILE"
-
-if [ -d "executor/executor/bin" ]; then
-    cd executor/executor/bin || exit 1
-    echo "✅ Executor berhasil diunduh dan diekstrak."
-else
-    echo "❌ Direktori 'executor/executor/bin' tidak ditemukan! Ekstraksi mungkin gagal."
-    exit 1
-fi
-
-# Buat environment file
-sudo bash -c "cat > $ENV_FILE" <<EOL
-RPC_ENDPOINTS='{
+export RPC_ENDPOINTS='{
   "l2rn": ["https://t3rn-b2n.blockpi.network/v1/rpc/public", "http://b2n.rpc.caldera.xyz/http"],
-  "mont": ["https://testnet-rpc.monad.xyz"],
-  "arbt": ["https://arbitrum-sepolia.drpc.org", "https://arb-sepolia.g.alchemy.com/v2/$APIKEY_ALCHEMY"],
-  "bast": ["https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.g.alchemy.com/v2/$APIKEY_ALCHEMY"],
-  "blst": ["https://sepolia.blast.io", "https://blast-sepolia.g.alchemy.com/v2/$APIKEY_ALCHEMY"],
-  "opst": ["https://sepolia.optimism.io", "https://opt-sepolia.g.alchemy.com/v2/$APIKEY_ALCHEMY"],
-  "unit": ["https://unichain-sepolia.drpc.org", "https://unichain-sepolia.g.alchemy.com/v2/$APIKEY_ALCHEMY"]
+  "arbt": ["https://arb-sepolia.g.alchemy.com/v2/'\$ALCHEMY_API_KEY'", "https://arbitrum-sepolia.drpc.org"],
+  "bast": ["https://base-sepolia.g.alchemy.com/v2/'\$ALCHEMY_API_KEY'", "https://base-sepolia-rpc.publicnode.com"],
+  "blst": ["https://sepolia.blast.io", "https://blast-sepolia.drpc.org"],
+  "opst": ["https://sepolia.optimism.io", "https://optimism-sepolia.drpc.org"],
+  "unit": ["https://unichain-sepolia.drpc.org", "https://sepolia.unichain.org"]
 }'
-EXECUTOR_MAX_L3_GAS_PRICE="$GAS_PRICE"
-PRIVATE_KEY_LOCAL="$PRIVATE_KEY_LOCAL"
-ENABLED_NETWORKS="l2rn,arbitrum-sepolia,base-sepolia,optimism-sepolia,unichain-sepolia,blast-sepolia"
-EOL
 
-sudo chown -R "$EXECUTOR_USER":"$EXECUTOR_USER" "$INSTALL_DIR"
-sudo chmod 600 "$ENV_FILE"
+/root/executor/executor/bin/executor
+EOF
 
-# Buat systemd service
-sudo bash -c "cat > $SERVICE_FILE" <<EOL
+chmod +x /root/run_executor.sh
+
+# ------------------ Buat systemd service ------------------
+echo "[*] Buat service systemd..."
+cat <<EOF > /etc/systemd/system/t3rn-executor.service
 [Unit]
-Description=t3rn Executor Service
+Description=T3RN Executor Node
 After=network.target
 
 [Service]
-User=$EXECUTOR_USER
-WorkingDirectory=$INSTALL_DIR/executor/executor/bin
-ExecStart=$INSTALL_DIR/executor/executor/bin/executor
+User=root
+ExecStart=/root/run_executor.sh
 Restart=always
-RestartSec=10
-Environment=ENVIRONMENT=testnet
-Environment=LOG_LEVEL=debug
-Environment=LOG_PRETTY=false
-Environment=EXECUTOR_PROCESS_BIDS_ENABLED=true
-Environment=EXECUTOR_PROCESS_ORDERS_ENABLED=true
-Environment=EXECUTOR_PROCESS_CLAIMS_ENABLED=true
-Environment=EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=false
-Environment=EXECUTOR_PROCESS_ORDERS_API_ENABLED=false
-EnvironmentFile=$ENV_FILE
-Environment=ENABLED_NETWORKS=l2rn,arbitrum-sepolia,base-sepolia,blst-sepolia,optimism-sepolia,unichain-sepolia,monad-testnet
+RestartSec=5
+Environment=PATH=/usr/bin:/usr/local/bin
+WorkingDirectory=/root
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-EOL
+EOF
 
-# Reload & jalankan service
-sudo systemctl daemon-reload
-sudo systemctl enable t3rn-executor.service
-sudo systemctl start t3rn-executor.service
+# ------------------ Enable dan Start Service ------------------
+echo "[*] Reload systemd & aktifkan service..."
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable t3rn-executor
+systemctl restart t3rn-executor
 
-# Tampilkan status dan log
-echo "✅ Executor berhasil diinstall. Menampilkan status dan log..."
-sudo systemctl status t3rn-executor.service --no-pager
-sudo journalctl -u t3rn-executor.service -f --no-hostname -o cat
+echo ""
+echo "🚀 T3RN Executor berhasil dijalankan sebagai service!"
+echo "📜 Gunakan: journalctl -fu t3rn-executor untuk melihat log"
